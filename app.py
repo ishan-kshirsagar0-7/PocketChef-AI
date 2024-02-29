@@ -28,9 +28,7 @@ recipe_prompt = """
 You are the Gordon Ramsey of India. When a list of ingredients is given to you, you are perfectly skilled at hand-picking which items to use,
 to cook what dish. You know every single recipe of every single Indian dish, by heart. Hence, when a list of ingredients is given to you,
 you precisely recognize what dish can be cooked based on that list. Now, you are given a list of ingredients. Your main mission to provide
-a recipe, that is grounded to reality, and caters the taste of Indian audience. DO NOT make up fake recipes, and don't come up with unconventional
-combinations such as mixing fruit in spicy dishes, or cooking fruits in oil, etc. Create conventional, pre-existing, traditional indian recipes
-from the list of ingredients.
+a recipe, that is grounded to reality, and caters the taste of Indian audience. DO NOT make up fake recipes, and don't come up with unconventional combinations such as mixing fruit in spicy dishes, or cooking fruits in oil, etc. Create conventional, pre-existing, traditional indian recipes from the list of ingredients. If the ingredients aren't Indian, you are free to create a suitable appropriate recipe using those.
 
 Here are 5 GOLDEN RULES that you MUST adhere to :
 
@@ -40,13 +38,13 @@ those even if they are not a part of the list.
 ingredient, whether or not you will be making a salad, a main course, a starter, a dessert, a sweet dish, or a casual snack, etc. Only when
 you precisely categorize ingredients and the recipe, you will be able to correctly craft a dish.
 3. Avoid using every single ingredient altogether. Incline more towards picking certain items that fit better for a recipe over certain others.
-4. The dish has to be in an Indian context. Since you are aware of the taste of Indian culture, your recipes must strictly fall into this
-category.
-5. Lastly, provide a short, concise name for the recipe, not more than 2-3 words.
+4. The dish has to be preferrably in an Indian context. Since you are aware of the taste of Indian culture, your recipes must preferrably fall into this category. If the ingredients belong to a Western Cuisine and you just cannot whip up any Indian recipe using those, only then you can create a Western recipe.
+5. Provide a short, concise name for the recipe, not more than 2-3 words.
+6. Your output MUST be in the format as shown below. If the ingredients are western, return a western recipe, but do NOT deny to provide a dictionary output at ANY COST.
 
 This is exactly how your output should be formatted :
 
-{"recipe_name":"","ingredients":[...],"instructions":""}
+{"recipe_name":"","ingredients":[...],"instructions":["1.", "2."...]}
 
 INGREDIENTS :
 """
@@ -60,31 +58,94 @@ Your output should be of the format :
 RECIPE :
 """
 
-def let_him_cook(query):
-    if type(query) is str:
-        query = query
-    else:
-        query = vision_model.generate_content([ingredients_vision_prompt, query]).text
+# def let_him_cook(query):
+#     if type(query) is str:
+#         query = query
+#     else:
+#         query = vision_model.generate_content([ingredients_vision_prompt, query]).text
+    
+#     recipe_res = recipe_model.generate_content(f"{recipe_prompt}\n{query}").text
+#     recipe = json.loads(recipe_res)
+#     thumbnail_description = thumbnail_model.generate_content(f"{thumbnail_prompt}\n{recipe_res}").text
+#     tdesc = json.loads(thumbnail_description)
+#     fxn = Function()
+#     pred = fxn.predictions.create(
+#         tag="@samplefxn/stable-diffusion",
+#         inputs={
+#         "prompt":f"4k, ultra realistic, hd image of : {thumbnail_description}"
+#         }
+#     )
+#     generated_image = pred.results[0]
+#     byte_stream = BytesIO()
+#     generated_image.save(byte_stream, format="PNG")
+#     base64_encoded = base64.b64encode(byte_stream.getvalue())
+#     base64_string = base64_encoded.decode("utf-8")
+#     urls = []
+#     food = tdesc["dish_name"].replace(" ", "+")
+#     html = urllib.request.urlopen(f"https://www.youtube.com/results?search_query={food}")
+#     vid_urls = re.findall(r"watch\?v=(\S{11})", html.read().decode())
+#     for i in range(len(vid_urls[:4])):
+#         current = f"https://www.youtube.com/watch?v={vid_urls[i]}"
+#         urls.append(current)
+    
+#     final_output = {
+#         "recipe":recipe,
+#         "photo":base64_string,
+#         "links":urls
+#     }
+
+#     return final_output
+
+def let_him_cook(q):
+    try:
+        query = vision_model.generate_content([ingredients_vision_prompt, q]).text
+    except Exception as e:
+        print(e)
+        query = q
     
     recipe_res = recipe_model.generate_content(f"{recipe_prompt}\n{query}").text
-    recipe = json.loads(recipe_res)
+    # print(query)
+    # print(recipe_res)
+    try:
+        recipe = json.loads(recipe_res)
+    except Exception as e:
+        fixer_prompt = """
+        Provided to you will be a string that looks like a JSON dictionary. This dictionary was to be loaded into a Python dictionary using json.dumps() but failed. The error thrown during this process is also given to you. Your main mission is to fix this error by modifying the string's JSON syntax in such a way that json.dumps() won't throw any errors. In other words, fix the incorrect syntax of the JSON within the string, and provide the corrected version as the output.
+
+        GOLDEN RULES :
+
+        1. Apart from the corrected JSON string, DO NOT return anything else, no unnecessary characters, headers, backticks, symbols, escape sequences, texts, etc.
+        2. Never ever break Golden Rule Number 1.
+
+        Here's the flawed JSON string :
+        """
+        rpm = recipe_model.generate_content(f"{fixer_prompt}\n{recipe_res}\nHere's the error :\n{e}").text
+        # print(f"\nRPM : {rpm}\n")
+        recipe = json.loads(rpm)
     thumbnail_description = thumbnail_model.generate_content(f"{thumbnail_prompt}\n{recipe_res}").text
+    # print(thumbnail_description)
     tdesc = json.loads(thumbnail_description)
     fxn = Function()
+    fxn_prompt = f"""
+    Generate a 4k, ultra realistic, hd image of {tdesc["dish_name"]}. Use these visual cues to better understand : {tdesc["visual_cues"]}.
+    """
     pred = fxn.predictions.create(
         tag="@samplefxn/stable-diffusion",
         inputs={
-        "prompt":f"4k, ultra realistic, hd image of : {thumbnail_description}"
+        "prompt":fxn_prompt
         }
     )
+    # print(type(pred))
+    # print(pred)
     generated_image = pred.results[0]
+    # print(generated_image)
     byte_stream = BytesIO()
     generated_image.save(byte_stream, format="PNG")
     base64_encoded = base64.b64encode(byte_stream.getvalue())
     base64_string = base64_encoded.decode("utf-8")
     urls = []
     food = tdesc["dish_name"].replace(" ", "+")
-    html = urllib.request.urlopen(f"https://www.youtube.com/results?search_query={food}")
+    html = urllib.request.urlopen(f"https://www.youtube.com/outputs?search_query={food}")
     vid_urls = re.findall(r"watch\?v=(\S{11})", html.read().decode())
     for i in range(len(vid_urls[:4])):
         current = f"https://www.youtube.com/watch?v={vid_urls[i]}"
