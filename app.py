@@ -145,7 +145,7 @@ def let_him_cook(q):
     base64_string = base64_encoded.decode("utf-8")
     urls = []
     food = tdesc["dish_name"].replace(" ", "+")
-    html = urllib.request.urlopen(f"https://www.youtube.com/outputs?search_query={food}")
+    html = urllib.request.urlopen(f"https://www.youtube.com/results?search_query={food}")
     vid_urls = re.findall(r"watch\?v=(\S{11})", html.read().decode())
     for i in range(len(vid_urls[:4])):
         current = f"https://www.youtube.com/watch?v={vid_urls[i]}"
