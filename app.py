@@ -58,44 +58,6 @@ Your output should be of the format :
 RECIPE :
 """
 
-# def let_him_cook(query):
-#     if type(query) is str:
-#         query = query
-#     else:
-#         query = vision_model.generate_content([ingredients_vision_prompt, query]).text
-    
-#     recipe_res = recipe_model.generate_content(f"{recipe_prompt}\n{query}").text
-#     recipe = json.loads(recipe_res)
-#     thumbnail_description = thumbnail_model.generate_content(f"{thumbnail_prompt}\n{recipe_res}").text
-#     tdesc = json.loads(thumbnail_description)
-#     fxn = Function()
-#     pred = fxn.predictions.create(
-#         tag="@samplefxn/stable-diffusion",
-#         inputs={
-#         "prompt":f"4k, ultra realistic, hd image of : {thumbnail_description}"
-#         }
-#     )
-#     generated_image = pred.results[0]
-#     byte_stream = BytesIO()
-#     generated_image.save(byte_stream, format="PNG")
-#     base64_encoded = base64.b64encode(byte_stream.getvalue())
-#     base64_string = base64_encoded.decode("utf-8")
-#     urls = []
-#     food = tdesc["dish_name"].replace(" ", "+")
-#     html = urllib.request.urlopen(f"https://www.youtube.com/results?search_query={food}")
-#     vid_urls = re.findall(r"watch\?v=(\S{11})", html.read().decode())
-#     for i in range(len(vid_urls[:4])):
-#         current = f"https://www.youtube.com/watch?v={vid_urls[i]}"
-#         urls.append(current)
-    
-#     final_output = {
-#         "recipe":recipe,
-#         "photo":base64_string,
-#         "links":urls
-#     }
-
-#     return final_output
-
 def let_him_cook(q):
     try:
         query = vision_model.generate_content([ingredients_vision_prompt, q]).text
@@ -146,9 +108,10 @@ def let_him_cook(q):
     urls = []
     food = tdesc["dish_name"].replace(" ", "+")
     html = urllib.request.urlopen(f"https://www.youtube.com/results?search_query={food}")
-    vid_urls = re.findall(r"watch\?v=(\S{11})", html.read().decode())
+    vid_urls = set(re.findall(r"watch\?v=(\S{11})", html.read().decode()))
+    unique_vid_urls = list(vid_urls)
     for i in range(len(vid_urls[:4])):
-        current = f"https://www.youtube.com/watch?v={vid_urls[i]}"
+        current = f"https://www.youtube.com/watch?v={unique_vid_urls[i]}"
         urls.append(current)
     
     final_output = {
