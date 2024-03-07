@@ -110,7 +110,7 @@ def let_him_cook(q):
     html = urllib.request.urlopen(f"https://www.youtube.com/results?search_query={food}")
     vid_urls = set(re.findall(r"watch\?v=(\S{11})", html.read().decode()))
     unique_vid_urls = list(vid_urls)
-    for i in range(len(vid_urls[:4])):
+    for i in range(len(unique_vid_urls[:4])):
         current = f"https://www.youtube.com/watch?v={unique_vid_urls[i]}"
         urls.append(current)
     
