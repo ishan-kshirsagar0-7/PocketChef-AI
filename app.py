@@ -106,7 +106,10 @@ def let_him_cook(q):
     base64_encoded = base64.b64encode(byte_stream.getvalue())
     base64_string = base64_encoded.decode("utf-8")
     urls = []
-    food = tdesc["dish_name"].replace(" ", "+")
+    # food = tdesc["dish_name"].replace(" ", "+")
+    dn = tdesc["dish_name"]
+    search_term = f"{dn} recipe"
+    food = search_term.replace(" ", "+")
     html = urllib.request.urlopen(f"https://www.youtube.com/results?search_query={food}")
     vid_urls = set(re.findall(r"watch\?v=(\S{11})", html.read().decode()))
     unique_vid_urls = list(vid_urls)
