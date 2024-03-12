@@ -130,6 +130,12 @@ async def get_recipe_from_text(text: str):
     result = let_him_cook(q=text)
     return result
 
+@app.get("/keep-alive/")
+async def keep_alive():
+    statement = "Successfully activated the PocketChef API!"
+    print(statement)
+    return statement
+
 @app.post("/post-recipe/")
 async def post_recipe_from_image(file: UploadFile=File(...)):
     image_data = await file.read()
