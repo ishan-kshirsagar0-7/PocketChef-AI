@@ -8,4 +8,4 @@ Queue : Flutter App development in progress.
 
 Progress : Onboarding Screen completed.
 
-![onboarding_ss](screenshots/pcfai.png)
+![pcfai](https://github.com/ishan-kshirsagar0-7/PocketChef-AI/assets/83628182/e0346aa9-750f-43d4-893d-355555f5001b)
