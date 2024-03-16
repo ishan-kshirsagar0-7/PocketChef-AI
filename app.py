@@ -1,14 +1,14 @@
 import os
 from fastapi import FastAPI, File, UploadFile, Form
 from typing import Optional
-from fxn import Function
-from PIL import Image
-import base64
-from io import BytesIO
+from bing_image_urls import bing_image_urls
 import urllib.request
+from PIL import Image
+from io import BytesIO
 import re
 import json
 import google.generativeai as genai
+# import time
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -17,7 +17,6 @@ genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 vision_model = genai.GenerativeModel("gemini-pro-vision")
 recipe_model = genai.GenerativeModel("gemini-pro")
-thumbnail_model = genai.GenerativeModel("gemini-pro")
 
 ingredients_vision_prompt = """
 Given to you is an image of food items or ingredients. Your main mission is to extract the item names, and to display them in
@@ -30,7 +29,7 @@ to cook what dish. You know every single recipe of every single Indian dish, by 
 you precisely recognize what dish can be cooked based on that list. Now, you are given a list of ingredients. Your main mission to provide
 a recipe, that is grounded to reality, and caters the taste of Indian audience. DO NOT make up fake recipes, and don't come up with unconventional combinations such as mixing fruit in spicy dishes, or cooking fruits in oil, etc. Create conventional, pre-existing, traditional indian recipes from the list of ingredients. If the ingredients aren't Indian, you are free to create a suitable appropriate recipe using those.
 
-Here are 5 GOLDEN RULES that you MUST adhere to :
+Here are 8 GOLDEN RULES that you MUST adhere to :
 
 1. Your dish MUST use only those ingredients that are provided to you, nothing extra. The only exception are Indian spices, you can assume
 those even if they are not a part of the list.
@@ -41,37 +40,21 @@ you precisely categorize ingredients and the recipe, you will be able to correct
 4. The dish has to be preferrably in an Indian context. Since you are aware of the taste of Indian culture, your recipes must preferrably fall into this category. If the ingredients belong to a Western Cuisine and you just cannot whip up any Indian recipe using those, only then you can create a Western recipe.
 5. Provide a short, concise name for the recipe, not more than 2-3 words.
 6. Your output MUST be in the format as shown below. If the ingredients are western, return a western recipe, but do NOT deny to provide a dictionary output at ANY COST.
+7. You will be provided a list of recipes that the user already knows of. Your job is to suggest something other than those recipes. THIS IS VERY VERY IMPORTANT, ALWAYS REMEMBER THIS.
+8. NEVER EVER VIOLATE THE ABOVE RULES, AT ANY COST.
 
 This is exactly how your output should be formatted :
 
-{"recipe_name":"","ingredients":[...],"instructions":["1.", "2."...]}
+{"recipe_name":"","ingredients":[...],"instructions":""}
+
+The first key should be named "recipe_name", DO NOT CHANGE IT. Its value must be correct recipe name.
+The second key should be named "ingredients", DO NOT CHANGE IT. Its value must be the appropriate ingredients used in the recipe itself.
+The third key should be named "instructions", DO NOT CHANGE IT. Its value must the instructions on how to make the recipe, in markdown style format.
 
 INGREDIENTS :
 """
 
-thumbnail_prompt = """
-Given to you is a recipe of a dish. Extract the name of this dish, and provide brief visual cues as to how it should look.
-Your output should be of the format :
-
-{"dish_name":"","visual_cues":"describe precisely how the dish looks like"}
-
-RECIPE :
-"""
-
-def let_him_cook(q):
-    try:
-        query = vision_model.generate_content([ingredients_vision_prompt, q]).text
-    except Exception as e:
-        print(e)
-        query = q
-    
-    recipe_res = recipe_model.generate_content(f"{recipe_prompt}\n{query}").text
-    # print(query)
-    # print(recipe_res)
-    try:
-        recipe = json.loads(recipe_res)
-    except Exception as e:
-        fixer_prompt = """
+fixer_prompt = """
         Provided to you will be a string that looks like a JSON dictionary. This dictionary was to be loaded into a Python dictionary using json.dumps() but failed. The error thrown during this process is also given to you. Your main mission is to fix this error by modifying the string's JSON syntax in such a way that json.dumps() won't throw any errors. In other words, fix the incorrect syntax of the JSON within the string, and provide the corrected version as the output.
 
         GOLDEN RULES :
@@ -81,54 +64,103 @@ def let_him_cook(q):
 
         Here's the flawed JSON string :
         """
-        rpm = recipe_model.generate_content(f"{fixer_prompt}\n{recipe_res}\nHere's the error :\n{e}").text
-        # print(f"\nRPM : {rpm}\n")
+
+
+def get_recipe(ingreds, recipe_list):
+    recipe_res = recipe_model.generate_content(
+        f"{recipe_prompt}\n{ingreds}\nLIST OF RECIPES THAT YOU SHOULD NOT SUGGEST:\n{recipe_list}").text
+    try:
+        recipe = json.loads(recipe_res)
+    except Exception as e:
+        rpm = recipe_model.generate_content(
+            f"{fixer_prompt}\n{recipe_res}\nHere's the error:\n{e}").text
         recipe = json.loads(rpm)
-    thumbnail_description = thumbnail_model.generate_content(f"{thumbnail_prompt}\n{recipe_res}").text
-    # print(thumbnail_description)
-    tdesc = json.loads(thumbnail_description)
-    fxn = Function()
-    fxn_prompt = f"""
-    Generate a 4k, ultra realistic, hd image of {tdesc["dish_name"]}. Use these visual cues to better understand : {tdesc["visual_cues"]}.
-    """
-    pred = fxn.predictions.create(
-        tag="@samplefxn/stable-diffusion",
-        inputs={
-        "prompt":fxn_prompt
-        }
-    )
-    # print(type(pred))
-    # print(pred)
-    generated_image = pred.results[0]
-    # print(generated_image)
-    byte_stream = BytesIO()
-    generated_image.save(byte_stream, format="PNG")
-    base64_encoded = base64.b64encode(byte_stream.getvalue())
-    base64_string = base64_encoded.decode("utf-8")
+    return recipe
+
+
+def get_image_links(query):
+    imgls = bing_image_urls(query, limit=4)
+    return imgls
+
+
+def get_yt_links(recname):
     urls = []
-    # food = tdesc["dish_name"].replace(" ", "+")
-    dn = tdesc["dish_name"]
+    dn = recname
     search_term = f"{dn} recipe"
     food = search_term.replace(" ", "+")
-    html = urllib.request.urlopen(f"https://www.youtube.com/results?search_query={food}")
+    html = urllib.request.urlopen(
+        f"https://www.youtube.com/results?search_query={food}")
     vid_urls = set(re.findall(r"watch\?v=(\S{11})", html.read().decode()))
     unique_vid_urls = list(vid_urls)
     for i in range(len(unique_vid_urls[:4])):
         current = f"https://www.youtube.com/watch?v={unique_vid_urls[i]}"
         urls.append(current)
-    
-    final_output = {
-        "recipe":recipe,
-        "photo":base64_string,
-        "links":urls
-    }
+    return urls
+
+
+def let_him_cook(q):
+    try:
+        query = vision_model.generate_content(
+            [ingredients_vision_prompt, q]).text
+    except Exception as e:
+        print(e)
+        query = q
+
+    recipe_length = 4
+    final_recipe_list = []
+    recname_list = []
+    for i in range(recipe_length):
+        # print(f"THIS IS THE {i}th ITERATION, AND THE LIST IS : {recname_list}")
+        current_recipe = get_recipe(query, recipe_list=recname_list)
+        recname_list.append(current_recipe["recipe_name"])
+        final_recipe_list.append(current_recipe)
+
+    final_image_dict = {}
+    for i in range(recipe_length):
+        current_image_list = get_image_links(recname_list[i])
+        final_image_dict.update(
+            {
+                f"img{i+1}": current_image_list
+            }
+        )
+
+    final_yt_dict = {}
+    for i in range(recipe_length):
+        current_links = get_yt_links(recname_list[i])
+        final_yt_dict.update(
+            {
+                f"yt{i+1}": current_links
+            }
+        )
+
+    final_output = {}
+    for i in range(recipe_length):
+        final_output.update(
+            {
+                f"r{i+1}": {
+                    "recipe_details": final_recipe_list[i],
+                    "images": final_image_dict[f"img{i+1}"],
+                    "yt_videos": final_yt_dict[f"yt{i+1}"]
+                }
+            }
+        )
 
     return final_output
+
+
+# ilist = "chicken breast, rice, eggs, spinach, tomatoes, garlic, onions, bell peppers, cheese, pasta"
+# start = time.time()
+# fop = let_him_cook(ilist)
+# end = time.time()
+# print(fop)
+# print(f"\nTime it took: {round(end-start)} seconds.")
+
 
 @app.get("/get-recipe/")
 async def get_recipe_from_text(text: str):
     result = let_him_cook(q=text)
     return result
+
 
 @app.get("/keep-alive/")
 async def keep_alive():
@@ -136,8 +168,9 @@ async def keep_alive():
     print(statement)
     return statement
 
+
 @app.post("/post-recipe/")
-async def post_recipe_from_image(file: UploadFile=File(...)):
+async def post_recipe_from_image(file: UploadFile = File(...)):
     image_data = await file.read()
     image = Image.open(BytesIO(image_data))
     result = let_him_cook(q=image)
