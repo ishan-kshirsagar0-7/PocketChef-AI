@@ -1,6 +1,6 @@
 import os
 from fastapi import FastAPI, File, UploadFile, Form
-from typing import Optional
+from typing import List, Optional
 from bing_image_urls import bing_image_urls
 import urllib.request
 from PIL import Image
@@ -8,7 +8,6 @@ from io import BytesIO
 import re
 import json
 import google.generativeai as genai
-# import time
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -17,6 +16,7 @@ genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 vision_model = genai.GenerativeModel("gemini-pro-vision")
 recipe_model = genai.GenerativeModel("gemini-pro")
+thumbnail_model = genai.GenerativeModel("gemini-pro")
 
 ingredients_vision_prompt = """
 Given to you is an image of food items or ingredients. Your main mission is to extract the item names, and to display them in
@@ -98,7 +98,7 @@ def get_yt_links(recname):
     return urls
 
 
-def let_him_cook(q):
+def let_him_cook(q, recipe_history):
     try:
         query = vision_model.generate_content(
             [ingredients_vision_prompt, q]).text
@@ -106,59 +106,22 @@ def let_him_cook(q):
         print(e)
         query = q
 
-    recipe_length = 4
-    final_recipe_list = []
-    recname_list = []
-    for i in range(recipe_length):
-        # print(f"THIS IS THE {i}th ITERATION, AND THE LIST IS : {recname_list}")
-        current_recipe = get_recipe(query, recipe_list=recname_list)
-        recname_list.append(current_recipe["recipe_name"])
-        final_recipe_list.append(current_recipe)
+    recipe = get_recipe(query, recipe_history)
+    img_ls = get_image_links(recipe["recipe_name"])
+    yt_links = get_yt_links(recipe["recipe_name"])
 
-    final_image_dict = {}
-    for i in range(recipe_length):
-        current_image_list = get_image_links(recname_list[i])
-        final_image_dict.update(
-            {
-                f"img{i+1}": current_image_list
-            }
-        )
-
-    final_yt_dict = {}
-    for i in range(recipe_length):
-        current_links = get_yt_links(recname_list[i])
-        final_yt_dict.update(
-            {
-                f"yt{i+1}": current_links
-            }
-        )
-
-    final_output = {}
-    for i in range(recipe_length):
-        final_output.update(
-            {
-                f"r{i+1}": {
-                    "recipe_details": final_recipe_list[i],
-                    "images": final_image_dict[f"img{i+1}"],
-                    "yt_videos": final_yt_dict[f"yt{i+1}"]
-                }
-            }
-        )
+    final_output = {
+        "recipe": recipe,
+        "images": img_ls,
+        "yt_videos": yt_links
+    }
 
     return final_output
 
 
-# ilist = "chicken breast, rice, eggs, spinach, tomatoes, garlic, onions, bell peppers, cheese, pasta"
-# start = time.time()
-# fop = let_him_cook(ilist)
-# end = time.time()
-# print(fop)
-# print(f"\nTime it took: {round(end-start)} seconds.")
-
-
-@app.get("/get-recipe/")
-async def get_recipe_from_text(text: str):
-    result = let_him_cook(q=text)
+@app.post("/from-text/")
+async def get_recipe_from_text(text: str, recipe_history: List[str]=[]):
+    result = let_him_cook(q=text, recipe_history=recipe_history)
     return result
 
 
@@ -168,10 +131,9 @@ async def keep_alive():
     print(statement)
     return statement
 
-
-@app.post("/post-recipe/")
-async def post_recipe_from_image(file: UploadFile = File(...)):
+@app.post("/from-image/")
+async def post_recipe_from_image(file: UploadFile = File(...), recipe_history: List[str]=[]):
     image_data = await file.read()
     image = Image.open(BytesIO(image_data))
-    result = let_him_cook(q=image)
+    result = let_him_cook(q=image, recipe_history=recipe_history)
     return result
