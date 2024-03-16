@@ -124,6 +124,10 @@ async def get_recipe_from_text(text: str, recipe_history: List[str]=[]):
     result = let_him_cook(q=text, recipe_history=recipe_history)
     return result
 
+@app.get("/fetch-image/")
+async def fetch_image_from_internet(text: str):
+    op_img = get_image_links(text)[0]
+    return op_img
 
 @app.get("/keep-alive/")
 async def keep_alive():
