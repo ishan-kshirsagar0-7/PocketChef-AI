@@ -78,10 +78,11 @@ def get_recipe(ingreds, recipe_list):
     return recipe
 
 
-def get_image_links(query):
-    imgls = bing_image_urls(query, limit=4)
+def get_image_links(query, lim=4):
+    imgls = bing_image_urls(query, limit=lim)
+    if len(imgls) == 0:
+        imgls = bing_image_urls(query, limit=lim)
     return imgls
-
 
 def get_yt_links(recname):
     urls = []
@@ -126,7 +127,7 @@ async def get_recipe_from_text(text: str, recipe_history: List[str]=[]):
 
 @app.get("/fetch-image/")
 async def fetch_image_from_internet(text: str):
-    op_img = get_image_links(text)[0]
+    op_img = get_image_links(text)[1]
     return op_img
 
 @app.get("/keep-alive/")
