@@ -2,7 +2,6 @@ name: Keep API Alive
 
 on:
   schedule:
-    # Runs every 30 minutes, adjust as needed
     - cron: '*/5 * * * *'
 
 jobs:
