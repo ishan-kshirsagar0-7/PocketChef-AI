@@ -1,0 +1,13 @@
+name: Keep API Alive
+
+on:
+  schedule:
+    # Runs every 30 minutes, adjust as needed
+    - cron: '*/5 * * * *'
+
+jobs:
+  keep_api_awake:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Ping API to keep it awake
+      run: curl https://pocketchef-ai.onrender.com/keep-alive/
