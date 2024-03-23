@@ -121,7 +121,8 @@ def let_him_cook(q, recipe_history):
 
 
 @app.post("/from-text/")
-async def get_recipe_from_text(text: str, recipe_history: List[str]=[]):
+async def get_recipe_from_text(ingreds: List[str], recipe_history: List[str]=[]):
+    text = ", ".join(ingreds)
     result = let_him_cook(q=text, recipe_history=recipe_history)
     return result
 
