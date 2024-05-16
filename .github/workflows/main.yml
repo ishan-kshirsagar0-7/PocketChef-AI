@@ -2,7 +2,7 @@ name: Keep API Alive
 
 on:
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: '*/30 * * * *'
 
 jobs:
   keep_api_awake:
